@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft Addon Wiki Creator</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load JSZip library to read .zip files -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- Load PDF generation libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    
+    <style>
+        /* ... existing styles ... */
+        
+        .downloadable-wiki-styles nav a {
+            text-decoration: none; /* Remove default color and underline */
+            color: inherit; /* Inherit color from spans */
+        }
+        .downloadable-wiki-styles nav a:hover {
+            text-decoration: underline;
+        }
+
+        /* ... existing styles ... */
+        
+        /* Progress Bar */
+        #progress-bar-container {
+            width: 100%;
+            background-color: #374151; /* gray-700 */
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #4b5563; /* gray-600 */
+        }
+        #progress-bar {
+            width: 0%;
+            height: 30px;
+            background-color: #10B981; /* emerald-500 */
+            text-align: center;
+            line-height: 30px;
+            color: white;
+            font-weight: bold;
+            transition: width 0.2s ease-in-out;
+        }
+
+        /* Chevron icon transition */
+        .chevron-icon {
+            transition: transform 0.2s ease-in-out;
+        }
+
+        /* Loading spinner for PDF button */
+        .btn-spinner {
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 0.5rem;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 font-sans h-full flex flex-col items-center" style="font-family: 'Inter', sans-serif;">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-6xl w-full">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl md:text-5xl font-bold text-emerald-400">Minecraft Addon Wiki Creator</h1>
+            <p class="text-lg text-gray-300 mt-2">Upload your <span class="font-mono bg-gray-700 px-1 rounded">.zip</span> addon file to generate a wiki.</p>
+        </header>
+
+        <!-- Upload Section -->
+        <div id="upload-section" class="bg-gray-800 p-6 md:p-10 rounded-lg shadow-2xl border border-gray-700">
+            <label for="file-upload" class="relative cursor-pointer bg-gray-700 hover:bg-gray-600 border-2 border-dashed border-gray-500 rounded-lg flex flex-col items-center justify-center p-12 transition-all">
+                <svg class="w-16 h-16 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-4-4V7a4 4 0 014-4h.5A2.5 2.5 0 0111 5.5V9.5A2.5 2.5 0 018.5 12H7zM7 16v4m0 0v-4m0 0h.5A2.5 2.5 0 0011 13.5V9.5A2.5 2.5 0 008.5 7H7m0 0M7 16H6a2 2 0 01-2-2V7a2 2 0 012-2h1a2 2 0 012 2v2m1 4h2a2 2 0 002-2V7a2 2 0 00-2-2h-1a2 2 0 00-2 2v2m0 4v4m0 0v-4m0 0h.5a2.5 2.5 0 012.5 2.5v.5a2.5 2.5 0 01-2.5 2.5H16m0 0h-1m1 0v-4m0 0v4m0 0h-1.5a2.5 2.5 0 01-2.5-2.5V9.5A2.5 2.5 0 0113.5 7H15a2 2 0 012 2v2"></path></svg>
+                <span id="file-upload-text" class="mt-4 text-lg font-semibold text-gray-300">Click to upload or drag and drop</span>
+                <span class="mt-1 text-sm text-gray-400">.zip addon files only</span>
+            </label>
+            <input id="file-upload" type="file" class="hidden" accept=".zip, .mcaddon, .mcpack" />
+        </div>
+
+        <!-- Loading / Status Section -->
+        <div id="status-section" class="hidden w-full my-6">
+            <span id="status-text" class="text-xl text-gray-300 mb-2 block text-center">Reading file...</span>
+            <div id="progress-bar-container">
+                <div id="progress-bar">0%</div>
+            </div>
+        </div>
+        
+        <!-- Download Button -->
+        <div id="download-section" class="hidden text-center my-6 space-y-4 md:space-y-0 md:space-x-4">
+            <button id="download-html-button" class="w-full md:w-auto bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition-all transform hover:scale-105">
+                Download Wiki as HTML
+            </button>
+            <button id="download-pdf-button" class="w-full md:w-auto bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition-all transform hover:scale-105 relative">
+                <span id="pdf-btn-text">Download Wiki as PDF</span>
+                <svg id="pdf-btn-spinner" class="hidden btn-spinner w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Wiki Output Section -->
+        <div id="wiki-output" class="hidden flex-col md:flex-row gap-6">
+            <!-- Sidebar Navigation -->
+            <nav id="wiki-nav" class="w-full md:w-1/4 bg-gray-800 p-4 rounded-lg shadow-lg max-h-[80vh] overflow-y-auto border border-gray-700">
+                <!-- Nav content will be injected by JS -->
+            </nav>
+            <!-- Main Content -->
+            <main id="wiki-main" class="w-full md:w-3/4 bg-gray-800 p-6 rounded-lg shadow-lg max-h-[80vh] overflow-y-auto border border-gray-700">
+                <!-- Main content will be injected by JS -->
+            </main>
+        </div>
+    </div>
+
+    <!-- Preview Modal -->
+    <div id="preview-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-80 flex items-center justify-center z-50 p-4">
+        <!-- Modal content container with flex-col and max-height -->
+        <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-5xl border border-gray-700 flex flex-col max-h-[90vh]">
+            <h2 class="text-2xl font-bold text-emerald-400 p-6 border-b border-gray-700 flex-shrink-0">
+                Wiki Preview
+            </h2>
+            <!-- Scrollable content area -->
+            <div class="p-6 overflow-y-auto flex-grow">
+                <!-- Interactive preview will be rendered here -->
+                <div id="preview-content-wrapper" class="flex flex-col md:flex-row gap-6">
+                    <!-- This will be populated by JS -->
+                </div>
+            </div>
+            <!-- Footer -->
+            <div class="flex justify-end gap-4 p-6 border-t border-gray-700 bg-gray-800 rounded-b-lg flex-shrink-0">
+                <button id="preview-cancel-button" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg transition-all">
+                    Cancel
+                </button>
+                <button id="preview-accept-button" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2 px-6 rounded-lg transition-all">
+                    Looks Good!
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Global Libs ---
+        // Ensure libs are loaded, or throw error.
+        const { jsPDF } = window.jspdf;
+        const h2c = window.html2canvas;
+
+        // --- DOM Elements ---
+        const uploadSection = document.getElementById('upload-section');
+        const fileUpload = document.getElementById('file-upload');
+        const fileUploadText = document.getElementById('file-upload-text');
+        const statusSection = document.getElementById('status-section');
+        const statusText = document.getElementById('status-text');
+        const downloadSection = document.getElementById('download-section');
+        const downloadHtmlButton = document.getElementById('download-html-button');
+        const downloadPdfButton = document.getElementById('download-pdf-button');
+        const pdfBtnText = document.getElementById('pdf-btn-text');
+        const pdfBtnSpinner = document.getElementById('pdf-btn-spinner');
+        const wikiOutput = document.getElementById('wiki-output');
+        const wikiNav = document.getElementById('wiki-nav');
+        const wikiMain = document.getElementById('wiki-main');
+        
+        const progressBarContainer = document.getElementById('progress-bar-container');
+        const progressBar = document.getElementById('progress-bar');
+
+        const previewModal = document.getElementById('preview-modal');
+        const previewContentWrapper = document.getElementById('preview-content-wrapper');
+        const previewCancelButton = document.getElementById('preview-cancel-button');
+        const previewAcceptButton = document.getElementById('preview-accept-button');
+
+        let generatedWikiData = null; // Store for download and main render
+
+        // --- Event Listeners ---
+        fileUpload.addEventListener('change', handleFileSelect);
+        
+        uploadSection.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            uploadSection.firstElementChild.classList.add('bg-gray-600', 'border-emerald-400');
+        });
+        uploadSection.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            uploadSection.firstElementChild.classList.remove('bg-gray-600', 'border-emerald-400');
+        });
+        uploadSection.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            uploadSection.firstElementChild.classList.remove('bg-gray-600', 'border-emerald-400');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                fileUpload.files = files;
+                handleFileSelect({ target: fileUpload });
+            }
+        });
+
+        downloadHtmlButton.addEventListener('click', handleHtmlDownload);
+        downloadPdfButton.addEventListener('click', handlePdfDownload);
+        
+        previewCancelButton.addEventListener('click', resetUI);
+        previewAcceptButton.addEventListener('click', () => {
+            previewModal.classList.add('hidden');
+            renderWikiUI(generatedWikiData); // Render to the main page
+            wikiOutput.classList.remove('hidden');
+            downloadSection.classList.remove('hidden');
+        });
+        
+        function updateProgress(metadata) {
+            const percent = metadata.percent.toFixed(0);
+            progressBar.style.width = `${percent}%`;
+            progressBar.textContent = `${percent}%`;
+        }
+
+        // --- Main Functions ---
+        
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            fileUploadText.textContent = file.name;
+            uploadSection.classList.add('hidden');
+            statusSection.classList.remove('hidden');
+            statusText.textContent = `Reading ${file.name}...`;
+            progressBar.style.width = '0%';
+            progressBar.textContent = '0%';
+
+            processAddonZip(file);
+        }
+
+        async function processAddonZip(file) {
+            try {
+                const zip = await JSZip.loadAsync(file, {
+                    onUpdate: updateProgress
+                });
+                
+                statusText.textContent = 'Parsing addon files...';
+                progressBar.style.width = '100%';
+                progressBar.textContent = 'Parsing...';
+                
+                const wikiData = {
+                    entities: [],
+                    items: [],
+                    blocks: []
+                };
+                const langMap = {};
+
+                // --- 1. Build Language Map ---
+                const langFiles = zip.filter((path) => path.endsWith('.lang'));
+                for (const langFile of langFiles) {
+                    const content = await langFile.async('string');
+                    content.split('\n').forEach(line => {
+                        const parts = line.split('=');
+                        if (parts.length === 2) {
+                            langMap[parts[0].trim()] = parts[1].trim();
+                        }
+                    });
+                }
+                
+                // --- 2. Process Files (Regex Logic) ---
+                const filePromises = [];
+                const entityRegex = /(?:^|\/)entities\/(.+)\.json$/i;
+                const itemRegex = /(?:^|\/)items\/(.+)\.json$/i;
+                const blockRegex = /(?:^|\/)blocks\/(.+)\.json$/i;
+
+                zip.forEach((relativePath, zipEntry) => {
+                    if (zipEntry.dir) return; // Skip directories
+
+                    if (entityRegex.test(relativePath)) {
+                        filePromises.push(parseEntity(zipEntry, langMap, wikiData.entities));
+                    } else if (itemRegex.test(relativePath)) {
+                        filePromises.push(parseItem(zipEntry, langMap, wikiData.items));
+                    } else if (blockRegex.test(relativePath)) {
+                        filePromises.push(parseBlock(zipEntry, langMap, wikiData.blocks));
+                    }
+                });
+                
+                await Promise.all(filePromises);
+                
+                // --- 3. Sort Data ---
+                wikiData.entities.sort((a, b) => a.name.localeCompare(b.name));
+                wikiData.items.sort((a, b) => a.name.localeCompare(b.name));
+                wikiData.blocks.sort((a, b) => a.name.localeCompare(b.name));
+
+                // --- 4. Show Preview ---
+                generatedWikiData = wikiData; 
+                generateAndShowPreview(generatedWikiData); // Render to the preview modal
+                statusSection.classList.add('hidden');
+
+            } catch (error) {
+                console.error("Error processing zip file:", error);
+                statusText.textContent = `Error: ${error.message}. Please try again.`;
+                setTimeout(resetUI, 3000);
+            }
+        }
+        
+        function resetUI() {
+            statusSection.classList.add('hidden');
+            downloadSection.classList.add('hidden');
+            wikiOutput.classList.add('hidden');
+            previewModal.classList.add('hidden');
+
+            wikiNav.innerHTML = '';
+            wikiMain.innerHTML = '';
+            previewContentWrapper.innerHTML = ''; // Clear preview
+
+            fileUploadText.textContent = 'Click to upload or drag and drop';
+            if(fileUpload) {
+                fileUpload.value = ''; 
+            }
+            
+            generatedWikiData = null;
+
+            uploadSection.classList.remove('hidden');
+        }
+
+        async function parseEntity(zipEntry, langMap, dataArray) {
+            try {
+                const content = await zipEntry.async('string');
+                const json = JSON.parse(content);
+                const entityData = json['minecraft:entity'];
+                if (!entityData) return;
+
+                const id = entityData.description.identifier;
+                const langKey = `entity.${id}.name`;
+                const rawName = langMap[langKey] || formatIdentifier(id);
+                // Get a clean name for sorting
+                const name = rawName.replace(/§[0-9a-fl-ornr]/gi, '');
+                // Get an HTML-formatted name for display
+                const nameHtml = formatMinecraftText(rawName);
+                
+                const components = [];
+                if (entityData.components) {
+                    for (const key in entityData.components) {
+                        const pretty = prettifyComponent(key, entityData.components[key]);
+                        if (pretty) {
+                            components.push(pretty);
+                        }
+                    }
+                }
+                
+                dataArray.push({ id, name, nameHtml, components });
+            } catch (e) {
+                console.warn(`Could not parse ${zipEntry.name}: ${e.message}`);
+            }
+        }
+        
+        async function parseItem(zipEntry, langMap, dataArray) {
+            try {
+                const content = await zipEntry.async('string');
+                const json = JSON.parse(content);
+                const itemData = json['minecraft:item'];
+                if (!itemData) return;
+
+                const id = itemData.description.identifier;
+                const langKey = `item.${id}.name`;
+                const rawName = langMap[langKey] || formatIdentifier(id);
+                const name = rawName.replace(/§[0-9a-fl-ornr]/gi, '');
+                const nameHtml = formatMinecraftText(rawName);
+                
+                const components = [];
+                if (itemData.components) {
+                    for (const key in itemData.components) {
+                        const pretty = prettifyComponent(key, itemData.components[key]);
+                        if (pretty) {
+                            components.push(pretty);
+                        }
+                    }
+                }
+                
+                dataArray.push({ id, name, nameHtml, components });
+            } catch (e) {
+                console.warn(`Could not parse ${zipEntry.name}: ${e.message}`);
+            }
+        }
+        
+        async function parseBlock(zipEntry, langMap, dataArray) {
+            try {
+                const content = await zipEntry.async('string');
+                const json = JSON.parse(content);
+                const blockData = json['minecraft:block'];
+                if (!blockData) return;
+
+                const id = blockData.description.identifier;
+                const langKey = `tile.${id}.name`;
+                const rawName = langMap[langKey] || formatIdentifier(id);
+                const name = rawName.replace(/§[0-9a-fl-ornr]/gi, '');
+                const nameHtml = formatMinecraftText(rawName);
+                
+                const components = [];
+                if (blockData.components) {
+                    for (const key in blockData.components) {
+                        const pretty = prettifyComponent(key, blockData.components[key]);
+                        if (pretty) {
+                            components.push(pretty);
+                        }
+                    }
+                }
+                
+                dataArray.push({ id, name, nameHtml, components });
+            } catch (e) {
+                console.warn(`Could not parse ${zipEntry.name}: ${e.message}`);
+            }
+        }
+
+        // --- "No-Code" Logic ---
+        function prettifyComponent(key, data) {
+            const PRETTY_MAP = {
+                "minecraft:health": "Health",
+                "minecraft:type_family": "Family",
+                "minecraft:collision_box": "Collision Box",
+                "minecraft:movement": "Movement Speed",
+                "minecraft:damage_sensor": "Damage Sensor",
+                "minecraft:can_climb": "Can Climb",
+                "minecraft:is_baby": "Is Baby",
+                "minecraft:is_charged": "Is Charged",
+                "minecraft:is_chestable": "Is Chestable",
+                "minecraft:is_hidden_when_invisible": "Is Hidden When Invisible",
+                "minecraft:is_ignited": "Is Ignited",
+                "minecraft:is_illager_captain": "Is Illager Captain",
+                "minecraft:is_saddled": "Is Saddled",
+                "minecraft:is_shaking": "Is Shaking",
+                "minecraft:is_tamed": "Is Tamed",
+                "minecraft:rideable": "Rideable",
+                "minecraft:nameable": "Nameable",
+                "minecraft:hand_equipped": "Hand Equipped",
+                "minecraft:stacked_by_data": "Stacked by Data",
+                "minecraft:use_duration": "Use Duration",
+                "minecraft:foil": "Has Enchantment Glint",
+                "minecraft:destroy_time": "Destroy Time",
+                "minecraft:explosion_resistance": "Explosion Resistance",
+                "minecraft:flammable": "Flammable",
+                "minecraft:map_color": "Map Color",
+            };
+
+            const label = PRETTY_MAP[key] || formatIdentifier(key.replace('minecraft:', ''));
+
+            if (data === null || typeof data !== 'object') {
+                return { label, value: String(data) };
+            }
+            if (Object.keys(data).length === 0) {
+                return { label, value: "Enabled" };
+            }
+            if (data.value !== undefined) {
+                return { label, value: String(data.value) };
+            }
+            if (key === "minecraft:type_family" && data.family) {
+                return { label, value: data.family.join(', ') };
+            }
+            if (key === "minecraft:damage_sensor" && data.triggers) {
+                return { label, value: `Triggers on: ${data.triggers.on || data.triggers.cause || 'unknown'}` };
+            }
+
+            const keys = Object.keys(data);
+            if(keys.length > 0) {
+                return { label, value: keys.join(', ') };
+            }
+
+            return { label, value: "[Complex Object]" };
+        }
+
+        // --- UI Rendering (Refactored) ---
+        
+        function renderWikiUI(data) {
+            wikiNav.innerHTML = ''; 
+            wikiMain.innerHTML = ''; 
+            
+            const navEl = buildNavElement(data);
+            const mainEl = buildMainElement(data);
+
+            wikiNav.appendChild(navEl);
+            wikiMain.appendChild(mainEl);
+
+            // Add listeners to the elements *on the main page*
+            addToggleListeners(wikiNav);
+            addNavListeners(wikiNav, wikiMain);
+        }
+        
+        function buildNavElement(data) {
+            const nav = document.createElement('div'); // Wrapper div
+            
+            if (data.entities.length > 0) {
+                nav.appendChild(createNavSection('Entities', data.entities));
+            }
+            if (data.items.length > 0) {
+                nav.appendChild(createNavSection('Items', data.items));
+            }
+            if (data.blocks.length > 0) {
+                nav.appendChild(createNavSection('Blocks', data.blocks));
+            }
+            return nav;
+        }
+
+        function buildMainElement(data) {
+            const main = document.createElement('div'); // Wrapper div
+            
+            const allItems = [...data.entities, ...data.items, ...data.blocks];
+            
+            if (allItems.length === 0) {
+                main.innerHTML = '<div id="wiki-placeholder" class="text-center text-gray-400"><h2 class="text-2xl font-semibold">No data found</h2><p class="mt-2">No entities, items, or blocks were found in the addon.</p></div>';
+            } else {
+                allItems.forEach(item => {
+                    main.appendChild(createMainSection(item));
+                });
+            }
+            return main;
+        }
+
+        function addNavListeners(navParent, mainParent) {
+            const links = navParent.querySelectorAll('a');
+            const sections = mainParent.querySelectorAll('section');
+
+            links.forEach(a => {
+                a.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    
+                    sections.forEach(sec => {
+                        sec.classList.add('hidden');
+                    });
+                    
+                    const targetId = a.getAttribute('href');
+                    const targetSelector = `[id="${targetId.substring(1)}"]`;
+                    const targetSection = mainParent.querySelector(targetSelector);
+                    
+                    if (targetSection) {
+                        targetSection.classList.remove('hidden');
+                    }
+                    
+                    links.forEach(link => link.classList.remove('bg-emerald-600', 'text-white'));
+                    a.classList.add('bg-emerald-600', 'text-white');
+                });
+            });
+
+            const firstLink = navParent.querySelector('a');
+            if(firstLink) {
+                firstLink.click();
+            }
+        }
+        
+        function addToggleListeners(navParent) {
+            const toggles = navParent.querySelectorAll('.nav-toggle');
+            toggles.forEach(toggle => {
+                toggle.addEventListener('click', () => {
+                    const list = toggle.nextElementSibling;
+                    const icon = toggle.querySelector('.chevron-icon');
+                    
+                    list.classList.toggle('hidden');
+                    icon.classList.toggle('rotate-90');
+                });
+            });
+        }
+
+        function createNavSection(title, items) {
+            const section = document.createElement('div');
+            section.className = 'mb-2'; // Reduced margin
+
+            const toggle = document.createElement('h3');
+            toggle.className = 'nav-toggle flex justify-between items-center cursor-pointer p-2 rounded-md bg-gray-700 hover:bg-gray-600 transition-colors';
+            toggle.innerHTML = `
+                <span class="text-xl font-semibold text-emerald-400">${title}</span>
+                <svg class="chevron-icon w-5 h-5 text-gray-300 transition-transform" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+            `;
+            
+            const ul = document.createElement('ul');
+            ul.className = 'space-y-1 mt-2 pl-4 hidden'; // Hidden by default
+            
+            items.forEach(item => {
+                ul.innerHTML += `
+                    <li>
+                        <a href="#${item.id}" class="block px-3 py-1 rounded-md text-gray-200 hover:bg-gray-700 transition-colors">${item.nameHtml}</a>
+                    </li>
+                `;
+            });
+            
+            section.appendChild(toggle);
+            section.appendChild(ul);
+            return section;
+        }
+
+        function createMainSection(item) {
+            const section = document.createElement('section');
+            section.id = item.id;
+            section.className = 'hidden p-4 bg-gray-700 rounded-lg mb-4';
+            
+            let componentsHTML = '';
+            if (item.components.length > 0) {
+                componentsHTML = item.components.map(comp => `
+                    <div class="flex justify-between items-center bg-gray-800 p-3 rounded-md border border-gray-600">
+                        <span class="font-medium text-gray-300">${comp.label}</span>
+                        <span class="font-mono text-emerald-300 bg-gray-900 px-2 py-1 rounded">${comp.value}</span>
+                    </div>
+                `).join('');
+            } else {
+                componentsHTML = '<p class="text-gray-400">No simple components found.</p>';
+            }
+            
+            section.innerHTML = `
+                <h2 class="text-3xl font-bold text-white mb-2">${item.nameHtml}</h2>
+                <p class="text-sm text-gray-400 font-mono mb-6">${item.id}</p>
+                <h4 class="text-lg font-semibold text-emerald-400 mb-3">Components</h4>
+                <div class="space-y-3">${componentsHTML}</div>
+            `;
+            return section;
+        }
+
+        // --- Preview Logic ---
+        function generateAndShowPreview(data) {
+            previewContentWrapper.innerHTML = ''; // Clear previous preview
+            
+            const navEl = buildNavElement(data);
+            const mainEl = buildMainElement(data);
+            
+            navEl.className = 'w-full md:w-1/3 bg-gray-800 p-4 rounded-lg shadow-lg max-h-[65vh] overflow-y-auto border border-gray-700';
+            mainEl.className = 'w-full md:w-2/3 bg-gray-800 p-6 rounded-lg shadow-lg max-h-[65vh] overflow-y-auto border border-gray-700';
+
+            previewContentWrapper.appendChild(navEl);
+            previewContentWrapper.appendChild(mainEl);
+
+            addToggleListeners(navEl); // Add toggle listeners
+            addNavListeners(navEl, mainEl); // Add nav click listeners
+            
+            previewModal.classList.remove('hidden');
+        }
+
+        // --- Download Logic ---
+        function handleHtmlDownload() {
+            if (!generatedWikiData) return;
+            
+            const html = generateDownloadableHTML(generatedWikiData, false); // false = not for PDF
+            const blob = new Blob([html], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'addon-wiki.html';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        /**
+         * New PDF Download Handler
+         */
+        async function handlePdfDownload() {
+            if (!generatedWikiData) return;
+
+            // Set button to loading state
+            downloadPdfButton.disabled = true;
+            pdfBtnText.textContent = 'Generating...';
+            pdfBtnSpinner.classList.remove('hidden');
+            
+            const iframe = document.createElement('iframe');
+            
+            try {
+                // 1. Create a hidden iframe to render the full HTML
+                iframe.style.position = 'absolute';
+                iframe.style.left = '-9999px';
+                iframe.style.top = '0';
+                iframe.style.width = '1000px'; // Set a consistent width for rendering
+                iframe.style.height = '100px'; // Initial height, will grow
+                
+                // Get the HTML, telling it to be PDF-friendly (no scripts)
+                const html = generateDownloadableHTML(generatedWikiData, true);
+                iframe.srcdoc = html;
+                document.body.appendChild(iframe);
+
+                // 2. Wait for the iframe to load
+                await new Promise((resolve, reject) => {
+                    iframe.onload = resolve;
+                    iframe.onerror = reject;
+                });
+                
+                const contentBody = iframe.contentWindow.document.body;
+                
+                // 3. Use html2canvas to "screenshot" the iframe's content
+                const canvas = await h2c(contentBody, {
+                    width: contentBody.scrollWidth,
+                    height: contentBody.scrollHeight,
+                    windowWidth: contentBody.scrollWidth,
+                    windowHeight: contentBody.scrollHeight,
+                    scrollY: 0,
+                    scrollX: 0,
+                    useCORS: true
+                });
+
+                // 4. Create the PDF
+                // FIX: Use JPEG instead of PNG to avoid potential corruption issues
+                const imgData = canvas.toDataURL('image/jpeg', 0.95); // 0.95 quality
+                const pdf = new jsPDF('p', 'mm', 'a4'); // Portrait, millimeters, A4
+                
+                const imgWidthMM = 210; // A4 width in mm
+                const pageHeightMM = 297; // A4 height in mm
+                
+                const imgHeightMM = (canvas.height * imgWidthMM) / canvas.width;
+                
+                let heightLeft = imgHeightMM;
+                let position = 0;
+
+                // 5. Add the first page
+                // FIX: Use JPEG format
+                pdf.addImage(imgData, 'JPEG', 0, position, imgWidthMM, imgHeightMM);
+                heightLeft -= pageHeightMM;
+
+                // 6. Add subsequent pages if necessary
+                while (heightLeft > 0) {
+                    position = heightLeft - imgHeightMM; // Move the image "up"
+                    pdf.addPage();
+                    // FIX: Use JPEG format
+                    pdf.addImage(imgData, 'JPEG', 0, position, imgWidthMM, imgHeightMM);
+                    heightLeft -= pageHeightMM;
+                }
+
+                // 7. Save the PDF
+                pdf.save('addon-wiki.pdf');
+
+            } catch (error) {
+                console.error("Error generating PDF:", error);
+                pdfBtnText.textContent = 'Error';
+            } finally {
+                // 8. Cleanup
+                if (iframe) {
+                    document.body.removeChild(iframe);
+                }
+                // Reset button
+                downloadPdfButton.disabled = false;
+                pdfBtnText.textContent = 'Download Wiki as PDF';
+                pdfBtnSpinner.classList.add('hidden');
+            }
+        }
+
+        /**
+         * Generates the HTML for download or PDF
+         * @param {object} data The wiki data
+         * @param {boolean} forPdf If true, strips scripts and simplifies layout
+         */
+        function generateDownloadableHTML(data, forPdf = false) {
+            const styles = document.querySelector('style').innerHTML;
+            
+            let navHTML = '';
+            if (data.entities.length > 0) {
+                navHTML += `<h3>Entities</h3><ul>`;
+                data.entities.forEach(item => navHTML += `<li><a href="#${item.id}">${item.nameHtml}</a></li>`);
+                navHTML += `</ul>`;
+            }
+            if (data.items.length > 0) {
+                navHTML += `<h3>Items</h3><ul>`;
+                data.items.forEach(item => navHTML += `<li><a href="#${item.id}">${item.nameHtml}</a></li>`);
+                navHTML += `</ul>`;
+            }
+            if (data.blocks.length > 0) {
+                navHTML += `<h3>Blocks</h3><ul>`;
+                data.blocks.forEach(item => navHTML += `<li><a href="#${item.id}">${item.nameHtml}</a></li>`);
+                navHTML += `</ul>`;
+            }
+            
+            let mainHTML = '';
+            const allItems = [...data.entities, ...data.items, ...data.blocks];
+            
+            if (allItems.length === 0) {
+                mainHTML = '<p style="text-align: center; color: #555;">No addon data found (no entities, items, or blocks detected in behavior packs).</p>';
+            } else {
+                 allItems.forEach(item => {
+                    let componentsHTML = item.components.map(comp => `
+                        <div class="component">
+                            <span class="component-key">${comp.label}</span>
+                            <span class="component-val">${comp.value}</span>
+                        </div>
+                    `).join('');
+
+                    if (item.components.length === 0) {
+                        componentsHTML = '<p style="color: #777;">No simple components found.</p>';
+                    }
+
+                    mainHTML += `
+                        <section id="${item.id}">
+                            <h2>${item.nameHtml}</h2>
+                            <p style="font-family: monospace; color: #777;">${item.id}</p>
+                            ${componentsHTML}
+                        </section>
+                    `;
+                });
+            }
+            
+            // For PDF, we want a simple, single-column layout.
+            // For HTML, we want the interactive layout.
+            let containerClass = forPdf ? 'container-pdf' : 'container';
+            let navTag = forPdf ? `<nav style="display: none;">${navHTML}</nav>` : `<nav>${navHTML}</nav>`;
+            let mainTag = `<main>${mainHTML}</main>`;
+            
+            // Special layout for PDF
+            if (forPdf) {
+                containerClass = 'container'; // Use the standard class
+                navTag = ''; // Remove nav
+                // Show all sections
+                mainHTML = allItems.map(item => {
+                     let componentsHTML = item.components.map(comp => `
+                        <div class="component">
+                            <span class="component-key">${comp.label}</span>
+                            <span class="component-val">${comp.value}</span>
+                        </div>
+                    `).join('');
+                     if (item.components.length === 0) {
+                        componentsHTML = '<p style="color: #777;">No simple components found.</p>';
+                    }
+                    // Return the full section, NOT hidden
+                    return `
+                        <section id="${item.id}" style="page-break-inside: avoid;">
+                            <h2>${item.nameHtml}</h2>
+                            <p style="font-family: monospace; color: #777;">${item.id}</p>
+                            ${componentsHTML}
+                        </section>
+                    `;
+                }).join('');
+                mainTag = `<main>${mainHTML}</main>`;
+            }
+
+
+            const script = `
+                document.addEventListener('DOMContentLoaded', () => {
+                    const links = document.querySelectorAll('nav a');
+                    const sections = document.querySelectorAll('main section');
+                    
+                    if(sections.length > 0) {
+                        sections.forEach((s, index) => {
+                            s.style.display = index === 0 ? 'block' : 'none';
+                        });
+                        
+                        if (links.length > 0) {
+                             links[0].style.fontWeight = 'bold';
+                        }
+                    }
+                    
+                    links.forEach(a => {
+                        a.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            sections.forEach(s => s.style.display = 'none');
+                            
+                            const targetId = a.getAttribute('href');
+                            const targetSelector = \`[id="\${targetId.substring(1)}"]\`;
+                            const targetSection = document.querySelector(targetSelector);
+                            if(targetSection) {
+                                targetSection.style.display = 'block';
+                            }
+                            
+                            links.forEach(link => link.style.fontWeight = 'normal');
+                            a.style.fontWeight = 'bold';
+                        });
+                    });
+                });
+            `;
+
+            return `
+                <!DOCTYPE html>
+                <html lang="en">
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>Addon Wiki</title>
+                    <style>${styles}</style>
+                    ${forPdf ? '<style>body { background-color: #fff; } .container { flex-direction: column; } main { max-height: none; } section { page-break-inside: avoid; } </style>' : ''}
+                </head>
+                <body class="downloadable-wiki-styles">
+                    <header style="text-align: center; padding: 20px; background: #333; color: white;">
+                        <h1>Addon Wiki</h1>
+                    </header>
+                    <div class="${containerClass}">
+                        ${navTag}
+                        ${mainTag}
+                    </div>
+                    ${forPdf ? '' : `<script>${script}<\/script>`}
+                </body>
+                </html>
+            `;
+        }
+
+        // --- Helper Utilities ---
+
+        function formatMinecraftText(text) {
+            if (!text) return '';
+            
+            const colorMap = {
+                '0': '#000000', '1': '#0000AA', '2': '#00AA00', '3': '#00AAAA',
+                '4': '#AA0000', '5': '#AA00AA', '6': '#FFAA00', '7': '#AAAAAA',
+                '8': '#555555', '9': '#5555FF', 'a': '#55FF55', 'b': '#55FFFF',
+                'c': '#FF5555', 'd': '#FF55FF', 'e': '#FFFF55', 'f': '#FFFFFF'
+            };
+            const formatMap = {
+                'l': 'font-weight: bold;',
+                'o': 'font-style: italic;',
+                'n': 'text-decoration: underline;',
+                'm': 'text-decoration: line-through;'
+            };
+            const escapeHTML = (str) => str.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+            const parts = text.split('§');
+            let html = '';
+            let currentStyles = [];
+
+            if (parts[0].length > 0) {
+                html += `<span>${escapeHTML(parts[0])}</span>`;
+            }
+
+            for (let i = 1; i < parts.length; i++) {
+                const part = parts[i];
+                if (part.length === 0) continue; 
+                
+                const code = part[0].toLowerCase();
+                const content = escapeHTML(part.substring(1));
+
+                if (colorMap[code]) {
+                    currentStyles = currentStyles.filter(s => !s.startsWith('color:'));
+                    currentStyles.push(`color: ${colorMap[code]};`);
+                } else if (formatMap[code]) {
+                    const style = formatMap[code];
+                    if (!currentStyles.includes(style)) {
+                        currentStyles.push(style);
+                    }
+                } else if (code === 'r') {
+                    currentStyles = [];
+                }
+
+                if (content.length > 0) {
+                    if (currentStyles.length > 0) {
+                        html += `<span style="${currentStyles.join(' ')}">${content}</span>`;
+                    } else {
+                        html += `<span>${content}</span>`;
+                    }
+                }
+            }
+            return html;
+        }
+
+        function formatIdentifier(id) {
+            return id.split(':').pop().split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+        }
+    </script>
+</body>
+</html>
